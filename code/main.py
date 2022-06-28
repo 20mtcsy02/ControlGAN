@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
     now = datetime.datetime.now(dateutil.tz.tzlocal())
     timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
-    output_dir = '../output/%s_%s_%s' % \
+    output_dir = '/drive/MyDrive/output/%s_%s_%s' % \
         (cfg.DATASET_NAME, cfg.CONFIG_NAME, timestamp)
 
     split_dir, bshuffle = 'train', True
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     # Get data loader
     imsize = cfg.TREE.BASE_SIZE * (2 ** (cfg.TREE.BRANCH_NUM - 1))
     image_transform = transforms.Compose([
-        transforms.Scale(int(imsize * 76 / 64)),
+        transforms.Resize(int(imsize * 76 / 64)),
         transforms.RandomCrop(imsize),
         transforms.RandomHorizontalFlip()])
     dataset = TextDataset(cfg.DATA_DIR, split_dir,
