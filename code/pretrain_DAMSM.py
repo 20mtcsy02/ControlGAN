@@ -99,11 +99,11 @@ def train(dataloader, cnn_model, rnn_model, batch_size,
         if step > 0 and step % UPDATE_INTERVAL == 0:
             count = epoch * len(dataloader) + step
 
-            s_cur_loss0 = s_total_loss0[0] / UPDATE_INTERVAL
-            s_cur_loss1 = s_total_loss1[0] / UPDATE_INTERVAL
+            s_cur_loss0 = s_total_loss0 / UPDATE_INTERVAL
+            s_cur_loss1 = s_total_loss1 / UPDATE_INTERVAL
 
-            w_cur_loss0 = w_total_loss0[0] / UPDATE_INTERVAL
-            w_cur_loss1 = w_total_loss1[0] / UPDATE_INTERVAL
+            w_cur_loss0 = w_total_loss0 / UPDATE_INTERVAL
+            w_cur_loss1 = w_total_loss1 / UPDATE_INTERVAL
 
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:5d}/{:5d} batches | ms/batch {:5.2f} | '
@@ -154,8 +154,8 @@ def evaluate(dataloader, cnn_model, rnn_model, batch_size):
         if step == 50:
             break
 
-    s_cur_loss = s_total_loss[0] / step
-    w_cur_loss = w_total_loss[0] / step
+    s_cur_loss = s_total_loss / step
+    w_cur_loss = w_total_loss / step
 
     return s_cur_loss, w_cur_loss
 
@@ -167,13 +167,21 @@ def build_models():
     labels = Variable(torch.LongTensor(range(batch_size)))
     start_epoch = 0
     if cfg.TRAIN.NET_E != '':
-        state_dict = torch.load(cfg.TRAIN.NET_E)
-        text_encoder.load_state_dict(state_dict)
+        enc_state_dict = torch.load(cfg.TRAIN.NET_E)
+        text_encoder.load_state_dict(enc_state_dict['model_state_dict'])
         print('Load ', cfg.TRAIN.NET_E)
+        epoch = enc_state_dict['epoch']
+        try:
+            if epoch:
+                start_epoch = epoch
+            else:
+                start_epoch = 0
+        except NameError as e:
+            start_epoch = 0
         #
         name = cfg.TRAIN.NET_E.replace('text_encoder', 'image_encoder')
-        state_dict = torch.load(name)
-        image_encoder.load_state_dict(state_dict)
+        enc_state_dict = torch.load(name)
+        image_encoder.load_state_dict(enc_state_dict['model_state_dict'])
         print('Load ', name)
 
         istart = cfg.TRAIN.NET_E.rfind('_') + 8
@@ -217,7 +225,7 @@ if __name__ == "__main__":
     ##########################################################################
     now = datetime.datetime.now(dateutil.tz.tzlocal())
     timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
-    output_dir = '../output/%s_%s_%s' % \
+    output_dir = '/drive/MyDrive/output/%s_%s_%s' % \
         (cfg.DATASET_NAME, cfg.CONFIG_NAME, timestamp)
 
     model_dir = os.path.join(output_dir, 'Model')
@@ -281,9 +289,13 @@ if __name__ == "__main__":
 
             if (epoch % cfg.TRAIN.SNAPSHOT_INTERVAL == 0 or
                 epoch == cfg.TRAIN.MAX_EPOCH):
-                torch.save(image_encoder.state_dict(),
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict':image_encoder.state_dict()},
                            '%s/image_encoder%d.pth' % (model_dir, epoch))
-                torch.save(text_encoder.state_dict(),
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict':text_encoder.state_dict()},
                            '%s/text_encoder%d.pth' % (model_dir, epoch))
                 print('Save G/Ds models.')
     except KeyboardInterrupt:
