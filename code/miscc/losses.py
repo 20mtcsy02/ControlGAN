@@ -115,6 +115,25 @@ def words_loss(img_features, words_emb, labels,
     return loss0, loss1, att_maps
 
 # ##################Loss for G and Ds##############################
+## gradient penalty calculation
+
+def get_gp(real, fake, crit, alpha, gamma=10):
+  mix_images = real * alpha + fake * (1-alpha) # 128 x 3 x 128 x 128
+  mix_scores = crit(mix_images) # 128 x 1
+
+  gradient = torch.autograd.grad(
+      inputs = mix_images,
+      outputs = mix_scores,
+      grad_outputs=torch.ones_like(mix_scores),
+      retain_graph=True,
+      create_graph=True,
+      )[0] # 128 x 3 x 128 x 128
+
+  gradient = gradient.view(len(gradient), -1)   # 128 x 49152
+  gradient_norm = gradient.norm(2, dim=1) 
+  gp = gamma * ((gradient_norm-1)**2).mean()
+
+  return gp
 def discriminator_loss(netD, real_imgs, fake_imgs, conditions,
                        real_labels, fake_labels, words_embs, cap_lens, image_encoder, class_ids,
                         w_words_embs, wrong_caps_len, wrong_cls_id):
@@ -130,6 +149,9 @@ def discriminator_loss(netD, real_imgs, fake_imgs, conditions,
     batch_size = real_features.size(0)
     cond_wrong_logits = netD.COND_DNET(real_features[:(batch_size - 1)], conditions[1:batch_size])
     cond_wrong_errD = nn.BCELoss()(cond_wrong_logits, fake_labels[1:batch_size])
+    
+    alpha=torch.rand(len(real_imgs),1,1,1,device=device, requires_grad=True) # 128 x 1 x 1 x 1
+    gp = get_gp(real_imgs, fake_imgs.detach(), netD, alpha)
 
     if netD.UNCOND_DNET is not None:
         real_logits = netD.UNCOND_DNET(real_features)
@@ -137,9 +159,9 @@ def discriminator_loss(netD, real_imgs, fake_imgs, conditions,
         real_errD = nn.BCELoss()(real_logits, real_labels)
         fake_errD = nn.BCELoss()(fake_logits, fake_labels)
         errD = ((real_errD + cond_real_errD) / 2. +
-                (fake_errD + cond_fake_errD + cond_wrong_errD) / 3.)
+                (fake_errD + cond_fake_errD + cond_wrong_errD) / 3.) + gp
     else:
-        errD = cond_real_errD + (cond_fake_errD + cond_wrong_errD) / 2.
+        errD = cond_real_errD + (cond_fake_errD + cond_wrong_errD) / 2. + gp
 
     region_features, cnn_code = image_encoder(real_imgs)
 
