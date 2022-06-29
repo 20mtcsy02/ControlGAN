@@ -117,29 +117,33 @@ def words_loss(img_features, words_emb, labels,
 # ##################Loss for G and Ds##############################
 ## gradient penalty calculation
 
-def get_gp(real, fake, crit, alpha, gamma=10):
-  mix_images = real * alpha + fake * (1-alpha) # 128 x 3 x 128 x 128
-  mix_scores = crit(mix_images) # 128 x 1
+# def get_gp(real, fake, crit, alpha, gamma=10):
+#   mix_images = real * alpha + fake * (1-alpha) # 128 x 3 x 128 x 128
+#   mix_scores = crit(mix_images) # 128 x 1
 
-  gradient = torch.autograd.grad(
-      inputs = mix_images,
-      outputs = mix_scores,
-      grad_outputs=torch.ones_like(mix_scores),
-      retain_graph=True,
-      create_graph=True,
-      )[0] # 128 x 3 x 128 x 128
+#   gradient = torch.autograd.grad(
+#       inputs = mix_images,
+#       outputs = mix_scores,
+#       grad_outputs=torch.ones_like(mix_scores),
+#       retain_graph=True,
+#       create_graph=True,
+#       )[0] # 128 x 3 x 128 x 128
 
-  gradient = gradient.view(len(gradient), -1)   # 128 x 49152
-  gradient_norm = gradient.norm(2, dim=1) 
-  gp = gamma * ((gradient_norm-1)**2).mean()
+#   gradient = gradient.view(len(gradient), -1)   # 128 x 49152
+#   gradient_norm = gradient.norm(2, dim=1) 
+#   gp = gamma * ((gradient_norm-1)**2).mean()
 
-  return gp
+#   return gp
 def discriminator_loss(netD, real_imgs, fake_imgs, conditions,
                        real_labels, fake_labels, words_embs, cap_lens, image_encoder, class_ids,
                         w_words_embs, wrong_caps_len, wrong_cls_id):
 
     real_features = netD(real_imgs)
     fake_features = netD(fake_imgs.detach())
+    ##Adding mix images here
+    alpha=torch.rand(len(real_imgs),1,1,1,device=device, requires_grad=True)
+    mix_images = real_imgs * alpha + fake_imgs*(1-alpha)
+    mix_scores = netD(mix_images)
     #
     cond_real_logits = netD.COND_DNET(real_features, conditions)
     cond_real_errD = nn.BCELoss()(cond_real_logits, real_labels)
@@ -150,8 +154,14 @@ def discriminator_loss(netD, real_imgs, fake_imgs, conditions,
     cond_wrong_logits = netD.COND_DNET(real_features[:(batch_size - 1)], conditions[1:batch_size])
     cond_wrong_errD = nn.BCELoss()(cond_wrong_logits, fake_labels[1:batch_size])
     
-    alpha=torch.rand(len(real_imgs),1,1,1,device=device, requires_grad=True) # 128 x 1 x 1 x 1
-    gp = get_gp(real_imgs, fake_imgs.detach(), netD, alpha)
+    ##Adding gradient here
+    gradient = torch.autograd.grad(inputs = mix_images, outputs = mix_scores, grad_outputs = torch.ones_like(mix_scores), retain_graph = True, create_graph = True)[0]
+    gradient = gradient.view(len(gradient), -1)
+    gradient_norm = gradient.norm(2, dim=1)
+    gp = 10 * ((gradient_norm-1)**2).mean()  #gamma = 10
+    
+#     alpha=torch.rand(len(real_imgs),1,1,1,device=device, requires_grad=True) # 128 x 1 x 1 x 1
+#     gp = get_gp(real_imgs, fake_imgs.detach(), netD, alpha)
 
     if netD.UNCOND_DNET is not None:
         real_logits = netD.UNCOND_DNET(real_features)
