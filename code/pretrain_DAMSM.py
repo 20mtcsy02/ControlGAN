@@ -167,26 +167,26 @@ def build_models():
     labels = Variable(torch.LongTensor(range(batch_size)))
     start_epoch = 0
     if cfg.TRAIN.NET_E != '':
-        enc_state_dict = torch.load(cfg.TRAIN.NET_E)
-        text_encoder.load_state_dict(enc_state_dict['model_state_dict'])
+        state_dict = torch.load(cfg.TRAIN.NET_E)
+        text_encoder.load_state_dict(state_dict)
         print('Load ', cfg.TRAIN.NET_E)
-        epoch = enc_state_dict['epoch']
-        try:
-            if epoch:
-                start_epoch = epoch
-            else:
-                start_epoch = 0
-        except NameError as e:
-            start_epoch = 0
+#         epoch = enc_state_dict['epoch']
+#         try:
+#             if epoch:
+#                 start_epoch = epoch
+#             else:
+#                 start_epoch = 0
+#         except NameError as e:
+#             start_epoch = 0
         #
         name = cfg.TRAIN.NET_E.replace('text_encoder', 'image_encoder')
-        enc_state_dict = torch.load(name)
-        image_encoder.load_state_dict(enc_state_dict['model_state_dict'])
+        state_dict = torch.load(name)
+        image_encoder.load_state_dict(state_dict)
         print('Load ', name)
 
         istart = cfg.TRAIN.NET_E.rfind('_') + 8
         iend = cfg.TRAIN.NET_E.rfind('.')
-        start_epoch = cfg.TRAIN.NET_E[istart:iend]
+        start_epoch = iend
         start_epoch = int(start_epoch) + 1
         print('start_epoch', start_epoch)
     if cfg.CUDA:
@@ -289,13 +289,9 @@ if __name__ == "__main__":
 
             if (epoch % cfg.TRAIN.SNAPSHOT_INTERVAL == 0 or
                 epoch == cfg.TRAIN.MAX_EPOCH):
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict':image_encoder.state_dict()},
+                torch.save(image_encoder.state_dict(),
                            '%s/image_encoder%d.pth' % (model_dir, epoch))
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict':text_encoder.state_dict()},
+                torch.save(text_encoder.state_dict(),
                            '%s/text_encoder%d.pth' % (model_dir, epoch))
                 print('Save G/Ds models.')
     except KeyboardInterrupt:
